@@ -1,102 +1,108 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { StyleSheet, Image, Platform } from 'react-native';
-
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React, { useState, useEffect } from "react";
+import { View, TextInput, Button, Alert, StyleSheet, Text } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function TabTwoScreen() {
+  const [amount, setAmount] = useState("");
+  const [recipientBankNumber, setRecipientBankNumber] = useState("");
+  const [activeCard, setActiveCard] = useState(null);
+
+  // Retrieve the active card from AsyncStorage
+  useEffect(() => {
+    const getActiveCard = async () => {
+      try {
+        const storedCard = await AsyncStorage.getItem("activeCard");
+        if (storedCard !== null) {
+          setActiveCard(JSON.parse(storedCard));
+        }
+      } catch (error) {
+        console.error("Error retrieving active card:", error);
+      }
+    };
+
+    getActiveCard();
+  }, []);
+
+  // Function to handle the transfer
+  const handleTransfer = async () => {
+    if (!activeCard) {
+      Alert.alert("No active account", "Please select an active account before transferring.");
+      return;
+    }
+
+    if (!amount || !recipientBankNumber) {
+      Alert.alert("Invalid input", "Please enter both the amount and recipient bank number.");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:5000/api/transfer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          senderAccountId: activeCard.id,
+          recipientBankNumber,
+          amount: parseFloat(amount),
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert("Success", "Transfer completed successfully.");
+      } else {
+        Alert.alert("Error", "Transfer failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("Transfer error:", error);
+      Alert.alert("Error", "An error occurred during the transfer.");
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={<Ionicons size={310} name="code-slash" style={styles.headerImage} />}>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user's current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText> library
-          to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      {activeCard ? (
+        <Text style={styles.info}>
+          Active Account: {activeCard.accountName} (Balance: {activeCard.balance})
+        </Text>
+      ) : (
+        <Text style={styles.info}>No active account selected</Text>
+      )}
+
+      <TextInput
+        style={styles.input}
+        placeholder="Recipient Bank Number"
+        value={recipientBankNumber}
+        onChangeText={setRecipientBankNumber}
+      />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Amount to Transfer"
+        value={amount}
+        keyboardType="numeric"
+        onChangeText={setAmount}
+      />
+
+      <Button title="Transfer" onPress={handleTransfer} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    padding: 20,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  input: {
+    height: 40,
+    borderColor: "gray",
+    borderWidth: 1,
+    marginBottom: 20,
+    paddingHorizontal: 10,
+  },
+  info: {
+    fontSize: 16,
+    marginBottom: 20,
   },
 });
