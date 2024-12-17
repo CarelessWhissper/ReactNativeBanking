@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { View, TextInput, Button, Alert, StyleSheet, Text } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import emitter from "@/constants/EventEmitter";
+import axios from "axios"; // Import axios for API requests
 
 export default function TabTwoScreen() {
   const [amount, setAmount] = useState("");
@@ -21,37 +23,75 @@ export default function TabTwoScreen() {
     };
 
     getActiveCard();
+
+    // Listen for the 'activeCardUpdated' event to refresh the active card
+    const subscription = emitter.addListener("activeCardUpdated", getActiveCard);
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
+
+  // Function to fetch updated active card data
+  const fetchUpdatedActiveCard = async (activeCardId) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const userId = await AsyncStorage.getItem("userId");
+
+      const response = await axios.get(`http://localhost:5000/api/users/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`, // Pass the token for authentication
+        },
+      });
+
+      const userData = response.data.user;
+      const updatedCard = userData.bankAccounts.find(account => account.id.toString() === activeCardId);
+
+      if (updatedCard) {
+        setActiveCard({
+          id: updatedCard.id.toString(),
+          accountName: updatedCard.accountName,
+          balance: updatedCard.balance,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching updated active card:", error);
+    }
+  };
 
   // Function to handle the transfer
   const handleTransfer = async () => {
     if (!activeCard) {
-      Alert.alert("No active account", "Please select an active account before transferring.");
+      Alert.alert(
+        "No active account",
+        "Please select an active account before transferring."
+      );
       return;
     }
 
     if (!amount || !recipientBankNumber) {
-      Alert.alert("Invalid input", "Please enter both the amount and recipient bank number.");
+      Alert.alert(
+        "Invalid input",
+        "Please enter both the amount and recipient bank number."
+      );
       return;
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/transfer", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          senderAccountId: activeCard.id,
-          recipientBankNumber,
-          amount: parseFloat(amount),
-        }),
+      const response = await axios.post("http://localhost:5000/api/transfer", {
+        senderAccountId: activeCard.id,
+        recipientBankNumber,
+        amount: parseFloat(amount),
       });
 
-      if (response.ok) {
+      if (response.status === 200) {
         Alert.alert("Success", "Transfer completed successfully.");
-      } else {
-        Alert.alert("Error", "Transfer failed. Please try again.");
+
+        // Fetch updated active card information
+        await fetchUpdatedActiveCard(activeCard.id);
+        
+        // Emit an event to notify other screens that the active card's balance has changed
+        emitter.emit("activeCardUpdated");
       }
     } catch (error) {
       console.error("Transfer error:", error);
@@ -63,7 +103,8 @@ export default function TabTwoScreen() {
     <View style={styles.container}>
       {activeCard ? (
         <Text style={styles.info}>
-          Active Account: {activeCard.accountName} (Balance: {activeCard.balance})
+          Active Account: {activeCard.accountName} (Balance:{" "}
+          {activeCard.balance})
         </Text>
       ) : (
         <Text style={styles.info}>No active account selected</Text>
